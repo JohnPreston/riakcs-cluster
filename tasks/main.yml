@@ -3,6 +3,8 @@
 
 - name: Setup repository from URL RPM
   yum: name={{ riak_url }} state=present
+  tags:
+  - packages
 
 - name: Setup Riak | RiakCS | Stanchion
   yum: name={{ item }} state=latest
@@ -11,28 +13,30 @@
   - riak-cs
   - stanchion
   tags:
-  - setup
+  - packages
 
 - name: Get RiakCS Version
   shell: yum info riak-cs | grep Version | grep -vi licens | cut -d ':' -f 2 | tr -cd [0-9.]
   register: yum_riakcs_version
-  set_fact: riakcs_version="{{ riakcs_version.stdout }}"
-
-- name: Templating
-  include: templates.yml
   tags:
+  - system
+
+- name: Set RiakCS Version global variable
+  set_fact: riakcs_version="{{ yum_riakcs_version.stdout }}"  
+  tags:
+  - system
 
 - name: Set ulimit in sysctl
   sysctl: name=fs.file-max value="{{ max_ulimit }}" reload=yes ignoreerrors=yes
   tags:
   - system
 
-- Deploy ulimit script for reboot persistence
+- name: Deploy ulimit script for reboot persistence
   script: ulimit.sh
   tags:
   - system
 
-- Disable requiretty for sudo
+- name: Disable requiretty for sudo
   lineinfile: dest=/etc/sudoers state=absent regexp=requiretty
   tags:
   - system
@@ -46,8 +50,6 @@
   template: src=riak_app.config.j2 dest={{ riak_appconfig_path }}/app.config
   tags:
   - templating
-  notify:
-  - start riak
 
 - name: Configure Stanchion vm.args
   template: src=stanchion_vm.args.j2 dest={{ stanchion_vmargs_path }}/vm.args
@@ -58,8 +60,6 @@
   template: src=stanchion_app.config.j2 dest={{ stanchion_appconfig_path }}/app.config
   tags:
   - templating
-  notify:
-  - start stanchion
 
 - name: Configure RiakCS vm.args
   template: src=riakcs_vm.args.j2 dest={{ riakcs_vmargs_path }}/vm.args
@@ -67,28 +67,40 @@
   - templating
 
 - name: Confgure RiakCS app.config
-  template: src=riakc_app.config.j2 dest={{ riakcs_appconfig_path }}/app.config
+  template: src=riakcs_app.config.j2 dest={{ riakcs_appconfig_path }}/app.config
   tags:
   - templating
-  notify:
-  - start riakcs
+
+- name: Start services
+  service: name="{{ item }}" state=started
+  with_items:
+  - riak
+  - stanchion
+  - riak-cs
 
 - name: Riak ping
-  riak: command=ping
+  riak: command=ping http_conn="{{ hostvars[inventory_hostname]['ansible_' + vnet_defined]['ipv4']['address'] }}:8098" validate_certs=no
   tags:
   - healtcheck
 
-  - name: Add nodes to cluster
-  riak: command=join target_node=riak@"{{ hostvars[groups['riak_nodes'][0]]['ansible_' + vnet_defined]['ipv4']['address'] }}"
+- name: Debug hosts
+  debug: msg="{{ hostvars[groups['riakcs_nodes'][0]]['ansible_' + vnet_defined]['ipv4']['address'] }}"
+  tags:
+  - debug
+
+- name: Add nodes to cluster
+  riak: command=join target_node=riak@"{{ hostvars[groups['riakcs_nodes'][0]]['ansible_' + vnet_defined]['ipv4']['address'] }}" http_conn="{{ hostvars[inventory_hostname]['ansible_' + vnet_defined]['ipv4']['address'] }}:8098" validate_certs=no
+  when:
+  - not "{{  hostvars[groups['riakcs_nodes'][0]] }}" == " {{ hostvars[iventory_hostname] }}"
 
 - name: Riak Cluster plan
-  riak: command=plan
+  riak: command=plan http_conn="{{ hostvars[inventory_hostname]['ansible_' + vnet_defined]['ipv4']['address'] }}:8098" validate_certs=no
   tags:
   - cluster
   - run
 
 - name: Riak Cluster commit
-  riak: command=commit
+  riak: command=commit http_conn="{{ hostvars[inventory_hostname]['ansible_' + vnet_defined]['ipv4']['address'] }}:8098" validate_certs=no
   tags:
   - cluster
   - run
