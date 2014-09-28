@@ -1,0 +1,94 @@
+---
+# tasks file for riakcs-cluster
+
+- name: Setup repository from URL RPM
+  yum: name={{ riak_url }} state=present
+
+- name: Setup Riak | RiakCS | Stanchion
+  yum: name={{ item }} state=latest
+  with_items:
+  - riak
+  - riak-cs
+  - stanchion
+  tags:
+  - setup
+
+- name: Get RiakCS Version
+  shell: yum info riak-cs | grep Version | grep -vi licens | cut -d ':' -f 2 | tr -cd [0-9.]
+  register: yum_riakcs_version
+  set_fact: riakcs_version="{{ riakcs_version.stdout }}"
+
+- name: Templating
+  include: templates.yml
+  tags:
+
+- name: Set ulimit in sysctl
+  sysctl: name=fs.file-max value="{{ max_ulimit }}" reload=yes ignoreerrors=yes
+  tags:
+  - system
+
+- Deploy ulimit script for reboot persistence
+  script: ulimit.sh
+  tags:
+  - system
+
+- Disable requiretty for sudo
+  lineinfile: dest=/etc/sudoers state=absent regexp=requiretty
+  tags:
+  - system
+
+- name: Configuring Riak vm.args
+  template: src=riak_vm.args.j2 dest={{ riak_vmargs_path }}/vm.args
+  tags:
+  - templating
+
+- name: Configuring Riak app.config
+  template: src=riak_app.config.j2 dest={{ riak_appconfig_path }}/app.config
+  tags:
+  - templating
+  notify:
+  - start riak
+
+- name: Configure Stanchion vm.args
+  template: src=stanchion_vm.args.j2 dest={{ stanchion_vmargs_path }}/vm.args
+  tags:
+  - templating
+
+- name: Configure Stanchion app.config
+  template: src=stanchion_app.config.j2 dest={{ stanchion_appconfig_path }}/app.config
+  tags:
+  - templating
+  notify:
+  - start stanchion
+
+- name: Configure RiakCS vm.args
+  template: src=riakcs_vm.args.j2 dest={{ riakcs_vmargs_path }}/vm.args
+  tags:
+  - templating
+
+- name: Confgure RiakCS app.config
+  template: src=riakc_app.config.j2 dest={{ riakcs_appconfig_path }}/app.config
+  tags:
+  - templating
+  notify:
+  - start riakcs
+
+- name: Riak ping
+  riak: command=ping
+  tags:
+  - healtcheck
+
+  - name: Add nodes to cluster
+  riak: command=join target_node=riak@"{{ hostvars[groups['riak_nodes'][0]]['ansible_' + vnet_defined]['ipv4']['address'] }}"
+
+- name: Riak Cluster plan
+  riak: command=plan
+  tags:
+  - cluster
+  - run
+
+- name: Riak Cluster commit
+  riak: command=commit
+  tags:
+  - cluster
+  - run

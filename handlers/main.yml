@@ -1,0 +1,11 @@
+---
+# handlers file for riakcs-cluster
+
+- name: start riak
+  service: name=riak state=started
+
+- name: start stanchion
+  service: name=stanchion state=started
+
+- name: start riakcs
+  service: name=riak-cs state=started

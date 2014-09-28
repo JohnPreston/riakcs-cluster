@@ -1,0 +1,16 @@
+---
+# defaults file for riakcs-cluster
+
+riak_url: http://yum.basho.com/gpg/basho-release-6-1.noarch.rpm
+max_ulimit: 43008
+
+vnet_defined: em2
+
+riak_vmargs_path: /etc/riak
+riak_appconfig_path: /etc/riak
+
+riakcs_vmargs_path: /etc/riak-cs
+riakcs_appconfig_path: /etc/riak-cs
+
+stanchion_vmargs_path: /etc/stanchion
+stanchion_appconfig_path: /etc/stanchion
