@@ -91,7 +91,7 @@
 - name: Add nodes to cluster
   riak: command=join target_node=riak@"{{ hostvars[groups['riakcs_nodes'][0]]['ansible_' + vnet_defined]['ipv4']['address'] }}" http_conn="{{ hostvars[inventory_hostname]['ansible_' + vnet_defined]['ipv4']['address'] }}:8098" validate_certs=no
   when:
-  - not "{{  hostvars[groups['riakcs_nodes'][0]] }}" == " {{ hostvars[iventory_hostname] }}"
+  - not "{{  hostvars[groups['riakcs_nodes'][0]] }}" == " {{ hostvars[inventory_hostname] }}"
 
 - name: Riak Cluster plan
   riak: command=plan http_conn="{{ hostvars[inventory_hostname]['ansible_' + vnet_defined]['ipv4']['address'] }}:8098" validate_certs=no
