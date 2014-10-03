@@ -4,7 +4,8 @@
 - name: Setup repository from URL RPM
   yum: name={{ riak_url }} state=present
   tags:
-  - packages
+  - riakcs_packages
+  - riakcs_cluster
 
 - name: Setup Riak | RiakCS | Stanchion
   yum: name={{ item }} state=latest
@@ -13,63 +14,75 @@
   - riak-cs
   - stanchion
   tags:
-  - packages
+  - riakcs_packages
+  - riakcs_cluster
 
 - name: Get RiakCS Version
   shell: yum info riak-cs | grep Version | grep -vi licens | cut -d ':' -f 2 | tr -cd [0-9.]
   register: yum_riakcs_version
   tags:
-  - system
+  - riakcs_system
+  - riakcs_cluster
 
 - name: Set RiakCS Version global variable
-  set_fact: riakcs_version="{{ yum_riakcs_version.stdout }}"  
+  set_fact: riakcs_version="{{ yum_riakcs_version.stdout }}"
   tags:
-  - system
+  - riakcs_cluster
+  - riakcs_system
 
 - name: Set ulimit in sysctl
   sysctl: name=fs.file-max value="{{ max_ulimit }}" reload=yes ignoreerrors=yes
   tags:
-  - system
+  - riakcs_cluster
+  - riakcs_system
 
 - name: Deploy ulimit script for reboot persistence
   script: ulimit.sh
   tags:
-  - system
+  - riakcs_cluster
+  - riakcs_system
 
 - name: Disable requiretty for sudo
   lineinfile: dest=/etc/sudoers state=absent regexp=requiretty
   tags:
-  - system
+  - riakcs_cluster
+  - riakcs_system
 
 - name: Configuring Riak vm.args
   template: src=riak_vm.args.j2 dest={{ riak_vmargs_path }}/vm.args
   tags:
-  - templating
+  - riakcs_cluster
+  - riakcs_templating
 
 - name: Configuring Riak app.config
   template: src=riak_app.config.j2 dest={{ riak_appconfig_path }}/app.config
   tags:
-  - templating
+  - riakcs_cluster
+  - riakcs_templating
 
 - name: Configure Stanchion vm.args
   template: src=stanchion_vm.args.j2 dest={{ stanchion_vmargs_path }}/vm.args
   tags:
-  - templating
+  - riakcs_cluster
+  - riakcs_templating
 
 - name: Configure Stanchion app.config
   template: src=stanchion_app.config.j2 dest={{ stanchion_appconfig_path }}/app.config
   tags:
-  - templating
+  - riakcs_cluster
+  - riakcs_templating
 
 - name: Configure RiakCS vm.args
   template: src=riakcs_vm.args.j2 dest={{ riakcs_vmargs_path }}/vm.args
   tags:
-  - templating
+  - riakcs_cluster
+  - riakcs_templating
 
 - name: Confgure RiakCS app.config
   template: src=riakcs_app.config.j2 dest={{ riakcs_appconfig_path }}/app.config
   tags:
-  - templating
+  - riakcs_cluster
+  - riakcs_templating
 
 - name: Start services
   service: name="{{ item }}" state=started
@@ -77,30 +90,37 @@
   - riak
   - stanchion
   - riak-cs
+  tags:
+  - riakcs_cluster
 
 - name: Riak ping
   riak: command=ping http_conn="{{ hostvars[inventory_hostname]['ansible_' + vnet_defined]['ipv4']['address'] }}:8098" validate_certs=no
   tags:
-  - healtcheck
+  - riakcs_healtcheck
+  - riakcs_cluster
 
 - name: Debug hosts
   debug: msg="{{ hostvars[groups['riakcs_nodes'][0]]['ansible_' + vnet_defined]['ipv4']['address'] }}"
   tags:
   - debug
+  - riakcs_cluster
 
 - name: Add nodes to cluster
-  riak: command=join target_node=riak@"{{ hostvars[groups['riakcs_nodes'][0]]['ansible_' + vnet_defined]['ipv4']['address'] }}" http_conn="{{ hostvars[inventory_hostname]['ansible_' + vnet_defined]['ipv4']['address'] }}:8098" validate_certs=no
+  riak: command=join target_node=riak@"{{ hostvars[groups['riakcs_nodes'][0]]['ansible_' + vnet_defined]['ipv4']['address'] }}"
+        http_conn="{{ hostvars[inventory_hostname]['ansible_' + vnet_defined]['ipv4']['address'] }}:8098"
+        validate_certs=no
   when:
   - not "{{  hostvars[groups['riakcs_nodes'][0]]['ansible_' + vnet_defined]['ipv4']['address'] }}" == " {{ hostvars[inventory_hostname]['ansible_' + vnet_defined]['ipv4']['address'] }}"
+  ignore_errors: yes
+  tags:
+  - riakcs_cluster
 
 - name: Riak Cluster plan
   riak: command=plan http_conn="{{ hostvars[inventory_hostname]['ansible_' + vnet_defined]['ipv4']['address'] }}:8098" validate_certs=no
   tags:
-  - cluster
-  - run
+  - riakcs_cluster
 
 - name: Riak Cluster commit
   riak: command=commit http_conn="{{ hostvars[inventory_hostname]['ansible_' + vnet_defined]['ipv4']['address'] }}:8098" validate_certs=no
   tags:
-  - cluster
-  - run
+  - riakcs_cluster
